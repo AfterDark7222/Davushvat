@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Backlog">
+<title>Backlog</title>
+<style>
+:root{--bg:#eef1f4;--c:#fff;--t:#14202b;--m:#5d6b78;--a:#0f766e;--b:#d5dce2}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1418;--c:#172128;--t:#e6edf2;--m:#93a3b0;--a:#5eead4;--b:#27343d}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--t);font:16px/1.4 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 0 calc(70px + env(safe-area-inset-bottom))}
+.pad{padding:12px}h2{margin:12px}.m,small{color:var(--m)}.m{margin:12px}
+input,select,textarea,button{font:inherit;font-size:16px;color:var(--t);background:var(--c);border:1px solid var(--b);border-radius:10px;padding:9px;margin:4px 0}
+input,select,textarea{width:100%}label{display:block;margin-top:8px}
+button{cursor:pointer}button.pri{background:var(--a);color:var(--bg);border-color:var(--a)}button.del{color:#dc2626}
+a{color:var(--m);cursor:pointer;padding:6px}
+.card{display:flex;gap:10px;align-items:center;background:var(--c);border:1px solid var(--b);border-radius:12px;padding:10px;margin:8px 12px}
+.card img,.ph{width:56px;height:84px;object-fit:cover;border-radius:6px;background:var(--b);flex:none}
+.inf{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.bd{align-self:flex-start;font-size:13px;padding:1px 8px;border-radius:99px;border:1px solid var(--a);color:var(--a)}
+.bar{height:6px;border-radius:3px;background:var(--b)}.bar i{display:block;height:100%;border-radius:3px;background:var(--a)}
+.row{display:flex;gap:8px;align-items:center}.note{border-top:1px solid var(--b);padding:6px 0}
+.f{display:flex;gap:6px;padding:0 12px}.f>*{flex:1;min-width:0}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--c);border-top:1px solid var(--b);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;border-radius:0;background:none;font-size:12px;color:var(--m);margin:0;padding:8px 0}nav button.on{color:var(--a);font-weight:600}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;z-index:5}
+#dc{background:var(--c);margin:auto;width:100%;max-height:100%;overflow-y:auto;padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));border-radius:14px}
+#ts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(80px + env(safe-area-inset-bottom));background:var(--t);color:var(--bg);padding:8px 14px;border-radius:99px;z-index:9}
+</style></head><body>
+
+<section class="pg" id="lib">
+<h2>Library</h2>
+<div class="f"><input id="fq" placeholder="Filter by title" oninput="renderLib()"></div>
+<div class="f"><select id="fs" onchange="renderLib()"></select><select id="ft" onchange="renderLib()"></select><select id="so" onchange="renderLib()"><option value="u">Recent</option><option value="rating">Rating</option><option value="title">Title</option></select></div>
+<div id="list"></div></section>
+
+<section class="pg" id="add" hidden>
+<h2>Add</h2>
+<div class="pad"><select id="at"><option value="movie">Movie</option><option value="series">Series</option><option value="book">Book</option><option value="game">Game</option></select>
+<input id="aq" placeholder="Type a title" enterkeyhint="search" onkeydown="if(event.key=='Enter')search()">
+<button class="pri" onclick="search()">Search</button></div>
+<div id="res"></div></section>
+
+<section class="pg" id="tasks" hidden>
+<h2>Reminders and tasks</h2>
+<div id="due"></div>
+<div class="pad"><b>To-do list</b>
+<input id="tt" placeholder="New task"><input id="td" type="datetime-local"><button class="pri" onclick="addTodo()">Add task</button></div>
+<div id="todos"></div></section>
+
+<section class="pg" id="stats" hidden><h2>Stats</h2><div id="st"></div></section>
+
+<section class="pg" id="set" hidden>
+<h2>Settings</h2>
+<div class="pad">
+<label>TMDB API key (movies and series)<input id="k1" autocapitalize="off" autocorrect="off"></label>
+<label>RAWG API key (games)<input id="k2" autocapitalize="off" autocorrect="off"></label>
+<button class="pri" onclick="saveKeys()">Save keys</button>
+<p class="m" style="margin:12px 0">Books need no key. Keys stay on this device.</p>
+<b>Backup</b>
+<textarea id="dt" rows="5" placeholder="Backup text appears here. To restore, paste it here."></textarea>
+<div class="row"><button onclick="exp()">Export (copy)</button><button onclick="imp()">Import</button></div>
+</div></section>
+
+<div id="dlg" hidden><div id="dc"></div></div>
+<div id="ts" hidden></div>
+<nav>
+<button data-t="lib" onclick="tab('lib')">📚<br>Library</button>
+<button data-t="add" onclick="tab('add')">➕<br>Add</button>
+<button data-t="tasks" onclick="tab('tasks')">⏰<br>Tasks <b id="bd"></b></button>
+<button data-t="stats" onclick="tab('stats')">📊<br>Stats</button>
+<button data-t="set" onclick="tab('set')">⚙️<br>Settings</button>
+</nav>
+
+<script>
+const $=s=>document.querySelector(s),E=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S={items:[],todos:[],keys:{tmdb:'',rawg:''}},R=[];
+try{Object.assign(S,JSON.parse(localStorage.getItem('bl1')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('bl1',JSON.stringify(S))}catch(e){alert('Could not save data on this device.')}};
+const ST={backlog:'Backlog (owned, not started)',want:'Want',progress:'In progress',completed:'Completed',paused:'Paused',dropped:'Dropped'};
+const TY={movie:'Movie',series:'Series',book:'Book',game:'Game'};
+const sn=k=>ST[k].split(' (')[0],stars=r=>r?'★'.repeat(Math.floor(r))+(r%1?'½':''):'';
+const now=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16);
+function toast(m){const t=$('#ts');t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2400)}
+
+function tab(n){document.querySelectorAll('.pg').forEach(p=>p.hidden=p.id!=n);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==n));({lib:renderLib,tasks:renderTasks,stats:renderStats,set:renderSet,add(){}})[n]();window.scrollTo(0,0)}
+
+function renderLib(){
+ const q=$('#fq').value.toLowerCase(),fs=$('#fs').value,ft=$('#ft').value,so=$('#so').value;
+ const a=S.items.filter(i=>(!fs||i.status==fs)&&(!ft||i.type==ft)&&i.title.toLowerCase().includes(q));
+ a.sort((x,y)=>so=='title'?x.title.localeCompare(y.title):so=='rating'?(y.rating||0)-(x.rating||0):y.updated-x.updated);
+ $('#list').innerHTML=a.map(i=>`<div class="card" onclick="openItem('${i.id}')">${i.cover?`<img src="${E(i.cover)}" loading="lazy" alt="">`:'<div class="ph"></div>'}<div class="inf"><b>${E(i.title)}</b><small>${TY[i.type]}${i.year?' · '+E(i.year):''}</small><span class="bd">${sn(i.status)}</span><div class="bar"><i style="width:${i.progress}%"></i></div><small>${i.progress}% ${stars(i.rating)}</small></div></div>`).join('')||'<p class="m">Nothing here yet. Open the Add tab to find a title.</p>';
+}
+
+const noteList=i=>i.notes.map((n,k)=>`<div class="note"><small>${n.d}</small> <a onclick="delNote('${i.id}',${k})">✕</a><div>${E(n.t)}</div></div>`).reverse().join('');
+const item=id=>S.items.find(x=>x.id==id);
+
+function openItem(id){
+ const i=item(id);if(!i)return;
+ $('#dlg').hidden=false;
+ $('#dc').innerHTML=`<h3>${E(i.title)}</h3><p class="m" style="margin:0">${E(i.overview||'')}</p>
+<label>Status<select id="d_s">${Object.entries(ST).map(([k,v])=>`<option value="${k}"${k==i.status?' selected':''}>${v}</option>`).join('')}</select></label>
+<label>Progress: <span id="d_pv">${i.progress}</span>%<input id="d_p" type="range" min="0" max="100" step="5" value="${i.progress}" oninput="d_pv.textContent=this.value"></label>
+<label>Rating<select id="d_r">${[0,.5,1,1.5,2,2.5,3,3.5,4,4.5,5].map(r=>`<option value="${r}"${r==(i.rating||0)?' selected':''}>${r?stars(r)+' '+r:'No rating'}</option>`).join('')}</select></label>
+<label>Reminder<input id="d_m" type="datetime-local" value="${E(i.remind||'')}"></label>
+<label>Diary note<textarea id="d_n" rows="3" placeholder="What do you think today?"></textarea></label>
+<button onclick="addNote('${id}')">Add note</button><div id="d_l">${noteList(i)}</div>
+<div class="row"><button class="pri" onclick="saveItem('${id}')">Save</button><button onclick="closeDlg()">Close</button><button class="del" onclick="delItem('${id}')">Delete</button></div>`;
+}
+function closeDlg(){$('#dlg').hidden=true;renderLib();badge()}
+function addNote(id,quiet){const i=item(id),t=$('#d_n').value.trim();if(!t)return;i.notes.push({d:now().replace('T',' '),t});i.updated=Date.now();save();$('#d_n').value='';if(!quiet)$('#d_l').innerHTML=noteList(i)}
+function delNote(id,k){const i=item(id);i.notes.splice(k,1);save();$('#d_l').innerHTML=noteList(i)}
+function saveItem(id){
+ const i=item(id);addNote(id,1);
+ i.status=$('#d_s').value;i.progress=+$('#d_p').value;i.rating=+$('#d_r').value;i.remind=$('#d_m').value;
+ if(i.status=='completed'){i.progress=100;i.done=i.done||Date.now()}
+ i.updated=Date.now();save();closeDlg();toast('Saved')
+}
+function delItem(id){if(!confirm('Delete this entry?'))return;S.items=S.items.filter(x=>x.id!=id);save();closeDlg()}
+
+async function search(){
+ const t=$('#at').value,q=$('#aq').value.trim(),r=$('#res');if(!q)return;
+ r.innerHTML='<p class="m">Searching…</p>';let out=[],msg='';
+ try{
+  if(t=='book'){
+   const j=await(await fetch('https://openlibrary.org/search.json?limit=10&q='+encodeURIComponent(q))).json();
+   out=j.docs.map(d=>({title:d.title,year:d.first_publish_year||'',cover:d.cover_i?`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`:'',overview:(d.author_name||[]).join(', ')}));
+  }else if(t=='game'){
+   if(!S.keys.rawg)throw'Add your RAWG key in Settings first.';
+   const j=await(await fetch(`https://api.rawg.io/api/games?page_size=10&key=${encodeURIComponent(S.keys.rawg)}&search=${encodeURIComponent(q)}`)).json();
+   out=j.results.map(d=>({title:d.name,year:(d.released||'').slice(0,4),cover:d.background_image||'',overview:(d.genres||[]).map(g=>g.name).join(', ')}));
+  }else{
+   if(!S.keys.tmdb)throw'Add your TMDB key in Settings first.';
+   const j=await(await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${encodeURIComponent(S.keys.tmdb)}&query=${encodeURIComponent(q)}`)).json();
+   out=j.results.filter(d=>d.media_type==(t=='movie'?'movie':'tv')).slice(0,10).map(d=>({title:d.title||d.name,year:(d.release_date||d.first_air_date||'').slice(0,4),cover:d.poster_path?'https://image.tmdb.org/t/p/w185'+d.poster_path:'',overview:d.overview||''}));
+  }
+ }catch(e){msg=typeof e=='string'?e:'Lookup failed. Check your connection and your key.'}
+ R=out;
+ r.innerHTML=(msg?`<p class="m">${E(msg)}</p>`:out.map((o,k)=>`<div class="card">${o.cover?`<img src="${E(o.cover)}" alt="">`:'<div class="ph"></div>'}<div class="inf"><b>${E(o.title)}</b><small>${E(o.year)}</small><small>${E((o.overview||'').slice(0,90))}</small></div><button class="pri" onclick="addRes(${k})">Add</button></div>`).join('')||'<p class="m">No results.</p>')+`<div class="pad"><button onclick="add({title:'${E(q).replace(/'/g,'’')}'})">Add “${E(q)}” manually</button></div>`;
+}
+function addRes(k){add(R[k])}
+function add(o){
+ S.items.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:$('#at').value,title:o.title,year:String(o.year||''),cover:o.cover||'',overview:o.overview||'',status:'want',progress:0,rating:0,notes:[],remind:'',updated:Date.now()});
+ save();toast('Added: '+o.title);
+}
+
+function due(){
+ const n=now(),a=[];
+ S.items.forEach(i=>{
+  if(i.remind&&i.remind<=n)a.push({k:'r',id:i.id,t:i.title+': reminder'});
+  if(['paused','progress'].includes(i.status)&&Date.now()-i.updated>12096e5)a.push({k:'s',id:i.id,t:i.title+': no update for 14+ days ('+sn(i.status)+')'});
+ });
+ S.todos.forEach(o=>{if(!o.done&&o.due&&o.due<=n)a.push({k:'t',t:o.t+': due'})});
+ return a;
+}
+const badge=()=>{const c=due().length;$('#bd').textContent=c?'('+c+')':''};
+function renderTasks(){
+ $('#due').innerHTML=due().map(d=>`<div class="card"><div class="inf">${E(d.t)}</div>${d.id?`<button onclick="openItem('${d.id}')">Open</button>`:''}${d.k=='r'?`<button onclick="clr('${d.id}')">Done</button>`:''}</div>`).join('')||'<p class="m">Nothing due right now.</p>';
+ $('#todos').innerHTML=S.todos.map((o,k)=>`<div class="card"><input type="checkbox" style="width:auto" ${o.done?'checked':''} onchange="tg(${k})"><div class="inf"><span style="${o.done?'text-decoration:line-through':''}">${E(o.t)}</span><small>${o.due?E(o.due.replace('T',' ')):''}</small></div><a onclick="rm(${k})">✕</a></div>`).join('');
+ badge();
+}
+function clr(id){item(id).remind='';save();renderTasks()}
+function addTodo(){const t=$('#tt').value.trim();if(!t)return;S.todos.push({t,due:$('#td').value,done:false});$('#tt').value='';$('#td').value='';save();renderTasks()}
+function tg(k){S.todos[k].done=!S.todos[k].done;save();renderTasks()}
+function rm(k){S.todos.splice(k,1);save();renderTasks()}
+
+function renderStats(){
+ const c=k=>S.items.filter(i=>i.status==k).length,r=S.items.filter(i=>i.rating),y=new Date().getFullYear();
+ const dn=S.items.filter(i=>i.done&&new Date(i.done).getFullYear()==y).length;
+ $('#st').innerHTML=`<div class="card"><div class="inf"><span><b>${S.items.length}</b> entries in total</span>`+Object.keys(ST).map(k=>`<span>${sn(k)}: <b>${c(k)}</b></span>`).join('')+`<span>Completed this year: <b>${dn}</b></span><span>Average rating: <b>${r.length?(r.reduce((a,i)=>a+i.rating,0)/r.length).toFixed(2)+' / 5':'none yet'}</b></span><span>`+Object.keys(TY).map(k=>`${TY[k]}: <b>${S.items.filter(i=>i.type==k).length}</b>`).join(' · ')+'</span></div></div>';
+}
+
+function renderSet(){$('#k1').value=S.keys.tmdb;$('#k2').value=S.keys.rawg}
+function saveKeys(){S.keys.tmdb=$('#k1').value.trim();S.keys.rawg=$('#k2').value.trim();save();toast('Keys saved')}
+function exp(){const x=$('#dt');x.value=JSON.stringify({items:S.items,todos:S.todos});x.select();try{navigator.clipboard.writeText(x.value);toast('Copied. Paste it into a note or file.')}catch(e){toast('Select the text and copy it.')}}
+function imp(){
+ try{const j=JSON.parse($('#dt').value);if(!Array.isArray(j.items))throw 0;
+  if(!confirm('Replace current data with this backup?'))return;
+  S.items=j.items.map(i=>({notes:[],progress:0,status:'want',rating:0,updated:Date.now(),...i}));S.todos=j.todos||[];save();badge();toast('Backup restored')}
+ catch(e){alert('That text is not a valid backup.')}
+}
+
+$('#fs').innerHTML='<option value="">All statuses</option>'+Object.entries(ST).map(([k,v])=>`<option value="${k}">${sn(k)}</option>`).join('');
+$('#ft').innerHTML='<option value="">All types</option>'+Object.entries(TY).map(([k,v])=>`<option value="${k}">${v}</option>`).join('');
+document.addEventListener('visibilitychange',badge);
+tab('lib');badge();
+</script></body></html>
